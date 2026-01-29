@@ -1,0 +1,41 @@
+# Archivos de CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!embed_resources.cmake
+!CMakeLists.txt
+!toolchain-arm64.cmake
+
+# Archivos temporales de compilación
+*.o
+*.a
+*.so
+*.dylib
+
+# Directorios de build - Ignorar todo excepto los ejecutables
+build-arm64/*
+!build-arm64/auto_sync_server
+
+build-x64/*
+!build-x64/auto_sync_server
+
+# Archivos de log
+*.log
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-*
+*.code-workspace
+
+# Compilación temporal
+CMakeTmp/
