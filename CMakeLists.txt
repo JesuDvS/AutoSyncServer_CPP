@@ -33,26 +33,11 @@ file(GLOB_RECURSE RESOURCE_FILES
 
 set(RESOURCES_HEADER "${GENERATED_DIR}/resources.h")
 
-# ===== DEBUG: Mostrar recursos encontrados =====
 list(LENGTH RESOURCE_FILES RESOURCE_COUNT)
 message(STATUS "Recursos encontrados: ${RESOURCE_COUNT}")
 
 if(RESOURCE_COUNT EQUAL 0)
     message(WARNING "⚠️  No se encontraron recursos en src/view/")
-    
-    # Verificar que existe el directorio
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/view")
-        message(STATUS "El directorio src/view/ existe")
-        # Listar contenido
-        file(GLOB VIEW_CONTENTS "${CMAKE_CURRENT_SOURCE_DIR}/src/view/*")
-        foreach(ITEM ${VIEW_CONTENTS})
-            message(STATUS "  - ${ITEM}")
-        endforeach()
-    else()
-        message(FATAL_ERROR "❌ El directorio src/view/ NO existe")
-    endif()
-    
-    # Crear header vacío
     file(WRITE "${RESOURCES_HEADER}"
 "#ifndef EMBEDDED_RESOURCES_H
 #define EMBEDDED_RESOURCES_H
@@ -66,20 +51,8 @@ namespace Resources {
 #endif
 ")
 else()
-    message(STATUS "=== Recursos encontrados (${RESOURCE_COUNT}) ===")
-    foreach(RESOURCE ${RESOURCE_FILES})
-        message(STATUS "  📄 ${RESOURCE}")
-    endforeach()
-    
-    # Convertir lista a string separado por espacios (para pasar a script)
     string(REPLACE ";" " " RESOURCE_FILES_STR "${RESOURCE_FILES}")
-    
-    message(STATUS "Ejecutando embed_resources.cmake...")
-    message(STATUS "  RESOURCE_FILES: ${RESOURCE_FILES_STR}")
-    message(STATUS "  SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
-    message(STATUS "  OUTPUT_FILE: ${RESOURCES_HEADER}")
-    
-    # Generar header con recursos reales
+
     add_custom_command(
         OUTPUT ${RESOURCES_HEADER}
         COMMAND ${CMAKE_COMMAND}
@@ -93,7 +66,6 @@ else()
     )
 endif()
 
-# ===== TARGET PERSONALIZADO para generar resources.h =====
 add_custom_target(generate_resources
     DEPENDS ${RESOURCES_HEADER}
 )
@@ -103,18 +75,14 @@ file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 list(FILTER SOURCES EXCLUDE REGEX ".*/(build|CMakeFiles)/.*")
 list(FILTER SOURCES EXCLUDE REGEX ".*CMakeCXXCompilerId\\.cpp$")
 
-message(STATUS "Archivos fuente encontrados: ${SOURCES}")
-
 file(GLOB_RECURSE HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
 )
 list(FILTER HEADERS EXCLUDE REGEX ".*/(build|CMakeFiles)/.*")
 
-# ===== Ejecutable =====
 add_executable(${EXECUTABLE_NAME} ${SOURCES} ${HEADERS})
 
-# ===== CRÍTICO: El ejecutable DEPENDE de que resources.h se genere primero =====
 add_dependencies(${EXECUTABLE_NAME} generate_resources)
 
 target_include_directories(${EXECUTABLE_NAME} PRIVATE
@@ -122,10 +90,19 @@ target_include_directories(${EXECUTABLE_NAME} PRIVATE
     ${GENERATED_DIR}
 )
 
+# ===== LINKER =====
 target_link_libraries(${EXECUTABLE_NAME} PRIVATE
     Threads::Threads
-    pthread
 )
+
+# 🔥 FIX CRÍTICO PARA std::experimental::filesystem 🔥
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    target_link_libraries(${EXECUTABLE_NAME} PRIVATE stdc++fs)
+endif()
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_link_libraries(${EXECUTABLE_NAME} PRIVATE c++fs)
+endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(${EXECUTABLE_NAME} PRIVATE
