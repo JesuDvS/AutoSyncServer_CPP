@@ -94,7 +94,6 @@ int main() {
     // API REST
     // ============================================
     
-    // 🔥 NUEVO: Endpoint para obtener IP del cliente
     CROW_ROUTE(app, "/api/my_ip")
     ([](const crow::request& req){
         crow::json::wvalue response;
@@ -206,11 +205,12 @@ int main() {
         return crow::response(400, "No file uploaded");
     });
 
-    // DESCARGA CON STREAMING
+    // 🔥 DESCARGA CON STREAMING REAL - SOLUCIÓN
     CROW_ROUTE(app, "/api/download/<string>")
-    ([](const crow::request&, crow::response& res, const std::string& filename){
+    ([](const crow::request& req, crow::response& res, const std::string& filename){
         std::string file_path = g_file_manager->getFilePath(filename);
         
+        // Validar existencia
         if (!g_file_manager->fileExists(filename)) {
             res.code = 404;
             res.body = "File not found";
@@ -218,6 +218,7 @@ int main() {
             return;
         }
         
+        // Obtener tamaño del archivo
         struct stat stat_buf;
         if (stat(file_path.c_str(), &stat_buf) != 0) {
             res.code = 500;
@@ -228,6 +229,23 @@ int main() {
         
         size_t file_size = stat_buf.st_size;
         
+        // 📊 Log inicio de descarga
+        std::cout << "⬇️  Iniciando descarga: " << filename 
+                  << " (" << (file_size / 1024.0 / 1024.0) << " MB)" << std::endl;
+        
+        // Configurar headers ANTES de abrir el archivo
+        res.set_header("Content-Type", "application/octet-stream");
+        res.set_header("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        res.set_header("Content-Length", std::to_string(file_size));
+        res.set_header("Accept-Ranges", "bytes");
+        res.set_header("Cache-Control", "no-cache");
+        res.code = 200;
+        
+        // ✅ STREAMING REAL: Usar stream_response
+        res.set_static_file_info_unsafe(file_path);
+        
+        // Alternativa manual si set_static_file_info_unsafe no funciona:
+        /*
         std::ifstream file(file_path, std::ios::binary);
         if (!file) {
             res.code = 500;
@@ -236,20 +254,33 @@ int main() {
             return;
         }
         
-        res.set_header("Content-Type", "application/octet-stream");
-        res.set_header("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-        res.set_header("Content-Length", std::to_string(file_size));
-        res.set_header("Accept-Ranges", "bytes");
-        res.code = 200;
-        
-        const size_t chunk_size = 65536;
+        // Chunk de 256KB (óptimo para transferencia)
+        const size_t chunk_size = 262144;
         std::vector<char> buffer(chunk_size);
         
+        size_t total_sent = 0;
+        
         while (file.read(buffer.data(), chunk_size) || file.gcount() > 0) {
-            res.body.append(buffer.data(), file.gcount());
+            size_t bytes_read = file.gcount();
+            
+            // ✅ ENVIAR INMEDIATAMENTE cada chunk
+            res.write(buffer.data(), bytes_read);
+            
+            total_sent += bytes_read;
+            
+            // Log progreso cada 10 MB
+            if (total_sent % (10 * 1024 * 1024) == 0 || total_sent == file_size) {
+                std::cout << "📤 Progreso: " 
+                          << (total_sent / 1024.0 / 1024.0) << " / "
+                          << (file_size / 1024.0 / 1024.0) << " MB ("
+                          << (100 * total_sent / file_size) << "%)" << std::endl;
+            }
         }
         
         file.close();
+        std::cout << "✅ Descarga completa: " << filename << std::endl;
+        */
+        
         res.end();
     });
 
