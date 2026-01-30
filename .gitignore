@@ -16,10 +16,10 @@ Makefile
 
 # Directorios de build - Ignorar todo excepto los ejecutables
 build-arm64/*
-!build-arm64/auto_sync_server
+#!build-arm64/auto_sync_server
 
 build-x64/*
-!build-x64/auto_sync_server
+#!build-x64/auto_sync_server
 
 # Archivos de log
 *.log
