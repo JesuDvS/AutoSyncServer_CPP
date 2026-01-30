@@ -66,10 +66,63 @@ function connectWebSocket() {
     };
 }
 
+// Copiar texto al portapapeles
+async function copyToClipboard(text, buttonElement) {
+    try {
+        await navigator.clipboard.writeText(text);
+        
+        // Feedback visual
+        const originalContent = buttonElement.innerHTML;
+        buttonElement.classList.add('copied');
+        buttonElement.innerHTML = '';
+        
+        setTimeout(() => {
+            buttonElement.classList.remove('copied');
+            buttonElement.innerHTML = originalContent;
+        }, 2000);
+        
+        console.log('✅ Texto copiado al portapapeles');
+    } catch (error) {
+        console.error('❌ Error al copiar:', error);
+        
+        // Fallback para navegadores antiguos
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        
+        try {
+            document.execCommand('copy');
+            
+            // Feedback visual
+            const originalContent = buttonElement.innerHTML;
+            buttonElement.classList.add('copied');
+            buttonElement.innerHTML = '';
+            
+            setTimeout(() => {
+                buttonElement.classList.remove('copied');
+                buttonElement.innerHTML = originalContent;
+            }, 2000);
+            
+            console.log('✅ Texto copiado (fallback)');
+        } catch (err) {
+            console.error('❌ Error en fallback:', err);
+            alert('No se pudo copiar el texto');
+        }
+        
+        document.body.removeChild(textarea);
+    }
+}
+
 // Agregar mensaje al UI
 function addMessageToUI(message, isSent) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+    
+    const wrapper = document.createElement('div');
+    wrapper.className = 'message-wrapper';
     
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
@@ -99,6 +152,20 @@ function addMessageToUI(message, isSent) {
         content.className = 'message-content';
         content.textContent = message.content;
         bubble.appendChild(content);
+        
+        // Botón de copiar solo para mensajes de texto
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-btn';
+        copyBtn.innerHTML = '📋';
+        copyBtn.title = 'Copiar mensaje';
+        copyBtn.setAttribute('aria-label', 'Copiar mensaje al portapapeles');
+        
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            copyToClipboard(message.content, copyBtn);
+        });
+        
+        wrapper.appendChild(copyBtn);
     }
     
     // Metadatos
@@ -117,7 +184,8 @@ function addMessageToUI(message, isSent) {
     meta.appendChild(time);
     bubble.appendChild(meta);
     
-    messageDiv.appendChild(bubble);
+    wrapper.appendChild(bubble);
+    messageDiv.appendChild(wrapper);
     chatContainer.appendChild(messageDiv);
 }
 
@@ -248,20 +316,35 @@ fileInput.addEventListener('change', (e) => {
 });
 
 // Drag and Drop
-document.body.addEventListener('dragover', (e) => {
+let dragCounter = 0;
+
+document.body.addEventListener('dragenter', (e) => {
     e.preventDefault();
-    dropZone.classList.remove('hidden');
+    dragCounter++;
+    if (dragCounter === 1) {
+        dropZone.classList.remove('hidden');
+        dropZone.style.display = 'flex';
+    }
 });
 
-dropZone.addEventListener('dragleave', (e) => {
-    if (e.target === dropZone) {
+document.body.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dragCounter--;
+    if (dragCounter === 0) {
         dropZone.classList.add('hidden');
+        dropZone.style.display = 'none';
     }
+});
+
+document.body.addEventListener('dragover', (e) => {
+    e.preventDefault();
 });
 
 dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
+    dragCounter = 0;
     dropZone.classList.add('hidden');
+    dropZone.style.display = 'none';
     
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
@@ -269,10 +352,29 @@ dropZone.addEventListener('drop', (e) => {
     }
 });
 
+// Prevenir comportamiento por defecto del drag en el documento
+document.addEventListener('dragover', (e) => {
+    e.preventDefault();
+});
+
+document.addEventListener('drop', (e) => {
+    e.preventDefault();
+});
+
 // Inicializar
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 AutoSync Client iniciado');
     connectWebSocket();
+    
+    // Ajustar altura en móviles para compensar la barra de direcciones
+    const setVH = () => {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+    
+    setVH();
+    window.addEventListener('resize', setVH);
+    window.addEventListener('orientationchange', setVH);
 });
 
 // Exponer función global para descargas

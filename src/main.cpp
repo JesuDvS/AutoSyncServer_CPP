@@ -223,12 +223,21 @@ int main() {
             return crow::response(500, "Cannot read file");
         }
         
-        std::string content((std::istreambuf_iterator<char>(file)),
-                           std::istreambuf_iterator<char>());
+        // Leer archivo en chunks para evitar saturar memoria
+        const size_t chunk_size = 1024 * 1024; // 1 MB chunks
+        std::string content;
+        content.reserve(chunk_size);
+        char buffer[chunk_size];
+        
+        while (file.read(buffer, chunk_size) || file.gcount() > 0) {
+            content.append(buffer, file.gcount());
+        }
+        file.close();
         
         auto response = crow::response(content);
         response.set_header("Content-Type", "application/octet-stream");
         response.set_header("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        response.set_header("Content-Length", std::to_string(content.size()));
         return response;
     });
 

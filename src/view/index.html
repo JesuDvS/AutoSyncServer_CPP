@@ -2,9 +2,34 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#128C7E">
     <title>AutoSync - Compartir Archivos</title>
     <link rel="stylesheet" href="/css/main.css">
+    <style>
+        /* Altura dinámica para móviles */
+        :root {
+            --vh: 1vh;
+        }
+        
+        body {
+            height: 100vh;
+            height: calc(var(--vh, 1vh) * 100);
+        }
+        
+        .container {
+            height: 100vh;
+            height: calc(var(--vh, 1vh) * 100);
+        }
+        
+        @media (min-width: 768px) {
+            .container {
+                height: 90vh;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">

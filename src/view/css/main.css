@@ -7,45 +7,103 @@
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    height: 100vh;
+    min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
     overflow: hidden;
+    padding: 0;
 }
 
 .container {
-    width: 95%;
+    width: 100%;
     max-width: 1000px;
-    height: 90vh;
+    height: 100vh;
     background: white;
-    border-radius: 16px;
-    box-shadow: 0 10px 60px rgba(0,0,0,0.3);
+    border-radius: 0;
+    box-shadow: none;
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
 
+/* Estilos para pantallas más grandes (tablets y desktop) */
+@media (min-width: 768px) {
+    body {
+        padding: 20px;
+    }
+    
+    .container {
+        width: 95%;
+        height: 90vh;
+        border-radius: 16px;
+        box-shadow: 0 10px 60px rgba(0,0,0,0.3);
+    }
+}
+
+/* Estilos para pantallas medianas (mitad de pantalla) */
+@media (min-width: 768px) and (max-width: 1200px) {
+    .container {
+        width: 90%;
+        max-width: 800px;
+    }
+}
+
 .header {
     background: #128C7E;
     color: white;
-    padding: 20px;
+    padding: 16px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    flex-shrink: 0;
 }
 
 .header h1 {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 500;
+}
+
+/* Responsive header para móviles */
+@media (max-width: 480px) {
+    .header {
+        padding: 12px 16px;
+    }
+    
+    .header h1 {
+        font-size: 18px;
+    }
+}
+
+@media (min-width: 768px) {
+    .header {
+        padding: 20px;
+    }
+    
+    .header h1 {
+        font-size: 24px;
+    }
 }
 
 .status-indicator {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 14px;
+    font-size: 13px;
+}
+
+@media (max-width: 480px) {
+    .status-indicator {
+        font-size: 12px;
+        gap: 6px;
+    }
+}
+
+@media (min-width: 768px) {
+    .status-indicator {
+        font-size: 14px;
+    }
 }
 
 .status-dot {
@@ -55,6 +113,7 @@ body {
     background: #25D366;
     box-shadow: 0 0 10px #25D366;
     animation: pulse 2s infinite;
+    flex-shrink: 0;
 }
 
 .status-dot.disconnected {
@@ -69,16 +128,24 @@ body {
 
 .chat-container {
     flex: 1;
-    padding: 20px;
+    padding: 16px;
     overflow-y: auto;
     background: #e5ddd5;
     background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h100v100H0z' fill='%23e5ddd5'/%3E%3Cpath d='M10 10h20v20H10z' fill='%23d4ccc4' opacity='0.05'/%3E%3C/svg%3E");
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 768px) {
+    .chat-container {
+        padding: 20px;
+    }
 }
 
 .message {
     margin-bottom: 12px;
     display: flex;
     animation: slideIn 0.3s ease;
+    position: relative;
 }
 
 @keyframes slideIn {
@@ -100,8 +167,26 @@ body {
     justify-content: flex-start;
 }
 
+.message-wrapper {
+    position: relative;
+    max-width: 85%;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+@media (min-width: 768px) {
+    .message-wrapper {
+        max-width: 65%;
+    }
+}
+
+.message.sent .message-wrapper {
+    flex-direction: row-reverse;
+}
+
 .message-bubble {
-    max-width: 65%;
+    flex: 1;
     padding: 8px 12px;
     border-radius: 8px;
     position: relative;
@@ -122,6 +207,72 @@ body {
     margin-bottom: 4px;
     font-size: 14px;
     line-height: 1.4;
+    user-select: text;
+}
+
+@media (max-width: 480px) {
+    .message-content {
+        font-size: 13px;
+    }
+}
+
+/* Botón de copiar */
+.copy-btn {
+    opacity: 0;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.copy-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+    transform: scale(1.1);
+}
+
+.copy-btn:active {
+    transform: scale(0.95);
+}
+
+.copy-btn.copied {
+    background: #25D366;
+}
+
+.copy-btn.copied::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 18px;
+}
+
+/* Mostrar botón en hover (desktop) */
+@media (hover: hover) {
+    .message-wrapper:hover .copy-btn {
+        opacity: 1;
+    }
+}
+
+/* Siempre visible en móviles (táctil) */
+@media (hover: none) {
+    .copy-btn {
+        opacity: 0.7;
+    }
+    
+    .copy-btn:active {
+        opacity: 1;
+    }
 }
 
 .message-meta {
@@ -132,6 +283,7 @@ body {
     font-size: 11px;
     color: #667781;
     margin-top: 4px;
+    flex-wrap: wrap;
 }
 
 .message-time {
@@ -151,20 +303,43 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+    .file-attachment {
+        padding: 10px;
+        gap: 8px;
+    }
 }
 
 .file-icon {
     font-size: 32px;
+    flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+    .file-icon {
+        font-size: 28px;
+    }
 }
 
 .file-info {
     flex: 1;
+    min-width: 0;
 }
 
 .file-name {
     font-weight: 600;
     margin-bottom: 4px;
     word-break: break-all;
+    font-size: 14px;
+}
+
+@media (max-width: 480px) {
+    .file-name {
+        font-size: 13px;
+    }
 }
 
 .file-size {
@@ -182,6 +357,17 @@ body {
     font-size: 12px;
     font-weight: 600;
     transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+    .download-btn {
+        padding: 6px 12px;
+        font-size: 11px;
+        width: 100%;
+        margin-top: 8px;
+    }
 }
 
 .download-btn:hover {
@@ -189,28 +375,49 @@ body {
     transform: scale(1.05);
 }
 
+.download-btn:active {
+    transform: scale(0.95);
+}
+
 .input-area {
     background: #f0f0f0;
-    padding: 12px 20px;
+    padding: 10px 16px;
     display: flex;
-    gap: 10px;
+    gap: 8px;
     align-items: center;
     box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+    flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+    .input-area {
+        padding: 12px 20px;
+        gap: 10px;
+    }
 }
 
 .file-upload-btn {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     background: white;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 22px;
+    font-size: 20px;
     transition: all 0.2s;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     position: relative;
+    flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+    .file-upload-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 22px;
+    }
 }
 
 .file-upload-btn:hover {
@@ -218,29 +425,50 @@ body {
     transform: scale(1.1);
 }
 
+.file-upload-btn:active {
+    transform: scale(0.95);
+}
+
 #messageInput {
     flex: 1;
-    padding: 12px 16px;
+    padding: 10px 14px;
     border: none;
     border-radius: 24px;
-    font-size: 15px;
+    font-size: 14px;
     outline: none;
     background: white;
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    min-width: 0;
+}
+
+@media (min-width: 768px) {
+    #messageInput {
+        padding: 12px 16px;
+        font-size: 15px;
+    }
 }
 
 #sendBtn {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     background: #128C7E;
     color: white;
     border: none;
     border-radius: 50%;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     transition: all 0.2s;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+    #sendBtn {
+        width: 44px;
+        height: 44px;
+        font-size: 14px;
+    }
 }
 
 #sendBtn:hover {
@@ -259,7 +487,7 @@ body {
     width: 100%;
     height: 100%;
     background: rgba(18, 140, 126, 0.95);
-    display: none; /* Cambia esto a "none" en lugar de "flex" */
+    display: none;
     justify-content: center;
     align-items: center;
     z-index: 1000;
@@ -272,12 +500,19 @@ body {
 .drop-zone-content {
     text-align: center;
     color: white;
+    padding: 20px;
 }
 
 .drop-icon {
-    font-size: 80px;
+    font-size: 60px;
     margin-bottom: 20px;
     animation: bounce 1s infinite;
+}
+
+@media (min-width: 768px) {
+    .drop-icon {
+        font-size: 80px;
+    }
 }
 
 @keyframes bounce {
@@ -286,10 +521,17 @@ body {
 }
 
 .drop-zone-content p {
-    font-size: 24px;
+    font-size: 18px;
     font-weight: 600;
 }
 
+@media (min-width: 768px) {
+    .drop-zone-content p {
+        font-size: 24px;
+    }
+}
+
+/* Scrollbar personalizada */
 ::-webkit-scrollbar {
     width: 6px;
 }
@@ -305,4 +547,17 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(0,0,0,0.3);
+}
+
+/* Mejoras de accesibilidad en móviles */
+@media (max-width: 480px) {
+    button, .file-upload-btn, #sendBtn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+}
+
+/* Soporte para modo oscuro del sistema */
+@media (prefers-color-scheme: dark) {
+    /* Puedes agregar estilos de modo oscuro aquí si lo deseas */
 }
