@@ -13,7 +13,14 @@ const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
 const dropZone = document.getElementById('dropZone');
 
-// 🔥 SIMPLIFICADO: Obtener IP del cliente desde su propio request
+// 🔥 NUEVO: Auto-resize del textarea
+function autoResizeTextarea() {
+    messageInput.style.height = 'auto';
+    const newHeight = Math.min(messageInput.scrollHeight, 120);
+    messageInput.style.height = newHeight + 'px';
+}
+
+// Obtener IP del cliente
 async function getMyIP() {
     try {
         const response = await fetch('/api/my_ip');
@@ -98,14 +105,13 @@ function connectWebSocket() {
     };
 }
 
-// 🔥 FUNCIÓN HELPER: Determinar si un mensaje es mío
+// Determinar si un mensaje es mío
 function isMyMessage(message) {
     if (!myIP || !message.sender_ip) {
         console.log('⚠️ No hay IP para comparar, asumiendo mensaje externo');
         return false;
     }
     
-    // Comparar IPs (puede venir con puerto como "127.0.0.1:12345")
     const senderIP = message.sender_ip.split(':')[0];
     const result = senderIP === myIP || message.sender_ip.includes(myIP);
     
@@ -212,7 +218,7 @@ function handleMessageExpansion(contentDiv, text) {
     return null;
 }
 
-// 🔥 AGREGAR MENSAJE AL UI (CON DEBUG)
+// Agregar mensaje al UI
 function addMessageToUI(message, isSent) {
     try {
         console.log(`🎨 Renderizando mensaje:`, {
@@ -325,6 +331,7 @@ async function sendTextMessage() {
         const data = await response.json();
         if (data.success) {
             messageInput.value = '';
+            autoResizeTextarea();
             console.log('✅ Mensaje enviado:', data.message_id);
         } else {
             console.error('❌ El servidor rechazó el mensaje:', data);
@@ -364,7 +371,7 @@ async function uploadFiles(files) {
     }
 }
 
-// Descargar archivo con PROGRESO
+// Descargar archivo con progreso
 async function downloadFile(filename, originalName) {
     const downloadBtn = event.target;
     downloadBtn.classList.add('downloading');
@@ -432,7 +439,7 @@ function formatTime(timestamp) {
     try {
         const date = new Date(timestamp);
         if (isNaN(date.getTime())) {
-            return timestamp; // Si no es una fecha válida, devolver como texto
+            return timestamp;
         }
         return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     } catch (error) {
@@ -479,12 +486,16 @@ function scrollToBottom() {
 // Event Listeners
 sendBtn.addEventListener('click', sendTextMessage);
 
-messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+// 🔥 CAMBIADO: Ctrl+Enter para enviar, Enter para nueva línea
+messageInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
         e.preventDefault();
         sendTextMessage();
     }
 });
+
+// 🔥 NUEVO: Auto-resize al escribir
+messageInput.addEventListener('input', autoResizeTextarea);
 
 fileUploadBtn.addEventListener('click', () => {
     fileInput.click();
@@ -542,22 +553,19 @@ document.addEventListener('drop', (e) => {
     e.preventDefault();
 });
 
-// 🔥 INICIALIZACIÓN CON DEBUG COMPLETO
+// Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('='.repeat(50));
     console.log('🚀 AutoSync Client iniciado');
     console.log('='.repeat(50));
     
-    // Verificar elementos DOM
     console.log('✓ chatContainer:', chatContainer ? 'OK' : '❌ NO ENCONTRADO');
     console.log('✓ messageInput:', messageInput ? 'OK' : '❌ NO ENCONTRADO');
     console.log('✓ sendBtn:', sendBtn ? 'OK' : '❌ NO ENCONTRADO');
     
-    // Obtener IP
     console.log('📍 Obteniendo mi IP...');
     await getMyIP();
     
-    // Conectar WebSocket
     console.log('🔌 Conectando WebSocket...');
     connectWebSocket();
     
@@ -571,8 +579,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('resize', setVH);
     window.addEventListener('orientationchange', setVH);
     
+    // Inicializar altura del textarea
+    autoResizeTextarea();
+    
     console.log('='.repeat(50));
     console.log('✅ Inicialización completa');
+    console.log('💡 Usa Ctrl+Enter para enviar mensajes');
     console.log('='.repeat(50));
 });
 

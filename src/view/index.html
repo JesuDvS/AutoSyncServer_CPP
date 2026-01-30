@@ -53,12 +53,13 @@
                 <input type="file" id="fileInput" multiple hidden>
             </div>
             
-            <input 
-                type="text" 
+            <!-- 🔥 CAMBIADO: input por textarea para soportar múltiples líneas -->
+            <textarea 
                 id="messageInput" 
                 placeholder="Escribe un mensaje o adjunta un archivo..."
                 autocomplete="off"
-            >
+                rows="1"
+            ></textarea>
             
             <button id="sendBtn">Enviar</button>
         </div>
