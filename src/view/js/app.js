@@ -36,12 +36,10 @@ function connectWebSocket() {
         console.log('📨 Mensaje recibido:', data);
         
         if (data.type === 'initial_state') {
-            // Cargar estado inicial
             chatContainer.innerHTML = '';
             data.messages.forEach(msg => addMessageToUI(msg, false));
             scrollToBottom();
         } else if (data.type === 'new_message') {
-            // Nuevo mensaje de otro cliente
             addMessageToUI(data.message, false);
             scrollToBottom();
         }
@@ -56,7 +54,6 @@ function connectWebSocket() {
         statusDot.classList.add('disconnected');
         statusText.textContent = 'Desconectado';
         
-        // Reconectar automáticamente
         if (!reconnectInterval) {
             reconnectInterval = setInterval(() => {
                 console.log('🔄 Intentando reconectar...');
@@ -71,7 +68,6 @@ async function copyToClipboard(text, buttonElement) {
     try {
         await navigator.clipboard.writeText(text);
         
-        // Feedback visual
         const originalContent = buttonElement.innerHTML;
         buttonElement.classList.add('copied');
         buttonElement.innerHTML = '';
@@ -81,11 +77,10 @@ async function copyToClipboard(text, buttonElement) {
             buttonElement.innerHTML = originalContent;
         }, 2000);
         
-        console.log('✅ Texto copiado al portapapeles');
+        console.log('✅ Texto copiado');
     } catch (error) {
         console.error('❌ Error al copiar:', error);
         
-        // Fallback para navegadores antiguos
         const textarea = document.createElement('textarea');
         textarea.value = text;
         textarea.style.position = 'fixed';
@@ -96,7 +91,6 @@ async function copyToClipboard(text, buttonElement) {
         try {
             document.execCommand('copy');
             
-            // Feedback visual
             const originalContent = buttonElement.innerHTML;
             buttonElement.classList.add('copied');
             buttonElement.innerHTML = '';
@@ -116,6 +110,63 @@ async function copyToClipboard(text, buttonElement) {
     }
 }
 
+// Detectar y formatear código
+function formatMessageContent(text) {
+    // Detectar bloques de código (```...```)
+    const codeBlockRegex = /```([\s\S]*?)```/g;
+    let formatted = escapeHtml(text);
+    
+    // Reemplazar bloques de código
+    formatted = formatted.replace(codeBlockRegex, (match, code) => {
+        return `<pre><code>${code.trim()}</code></pre>`;
+    });
+    
+    // Detectar código inline (`...`)
+    const inlineCodeRegex = /`([^`]+)`/g;
+    formatted = formatted.replace(inlineCodeRegex, (match, code) => {
+        if (!match.includes('<pre>')) {
+            return `<code>${code}</code>`;
+        }
+        return match;
+    });
+    
+    return formatted;
+}
+
+// Manejar expansión de mensajes largos
+function handleMessageExpansion(contentDiv, text) {
+    const lineCount = text.split('\n').length;
+    const charCount = text.length;
+    
+    // Si el mensaje es largo (más de 10 líneas o 500 caracteres)
+    if (lineCount > 10 || charCount > 500) {
+        contentDiv.classList.add('collapsed');
+        
+        const expandBtn = document.createElement('button');
+        expandBtn.className = 'expand-btn';
+        expandBtn.textContent = '▼ Ver más';
+        
+        expandBtn.addEventListener('click', () => {
+            if (contentDiv.classList.contains('collapsed')) {
+                contentDiv.classList.remove('collapsed');
+                contentDiv.classList.add('expanded');
+                expandBtn.textContent = '▲ Ver menos';
+            } else {
+                contentDiv.classList.remove('expanded');
+                contentDiv.classList.add('collapsed');
+                expandBtn.textContent = '▼ Ver más';
+                
+                // Scroll al mensaje cuando se colapsa
+                contentDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        });
+        
+        return expandBtn;
+    }
+    
+    return null;
+}
+
 // Agregar mensaje al UI
 function addMessageToUI(message, isSent) {
     const messageDiv = document.createElement('div');
@@ -128,7 +179,6 @@ function addMessageToUI(message, isSent) {
     bubble.className = 'message-bubble';
     
     if (message.type === 'file') {
-        // Mensaje de archivo
         const fileAttachment = document.createElement('div');
         fileAttachment.className = 'file-attachment';
         
@@ -147,13 +197,20 @@ function addMessageToUI(message, isSent) {
         
         bubble.appendChild(fileAttachment);
     } else {
-        // Mensaje de texto
+        // Mensaje de texto con formato
         const content = document.createElement('div');
         content.className = 'message-content';
-        content.textContent = message.content;
+        content.innerHTML = formatMessageContent(message.content);
+        
         bubble.appendChild(content);
         
-        // Botón de copiar solo para mensajes de texto
+        // Botón de expansión si es necesario
+        const expandBtn = handleMessageExpansion(content, message.content);
+        if (expandBtn) {
+            bubble.appendChild(expandBtn);
+        }
+        
+        // Botón de copiar
         const copyBtn = document.createElement('button');
         copyBtn.className = 'copy-btn';
         copyBtn.innerHTML = '📋';
@@ -235,12 +292,48 @@ async function uploadFiles(files) {
     }
 }
 
-// Descargar archivo
+// Descargar archivo con PROGRESO
 async function downloadFile(filename, originalName) {
+    // Obtener el botón de descarga
+    const downloadBtn = event.target;
+    downloadBtn.classList.add('downloading');
+    downloadBtn.disabled = true;
+    
     try {
         const response = await fetch(`/api/download/${filename}`);
-        const blob = await response.blob();
         
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        // Obtener el tamaño total
+        const contentLength = response.headers.get('Content-Length');
+        const total = parseInt(contentLength, 10);
+        
+        // Leer el stream
+        const reader = response.body.getReader();
+        const chunks = [];
+        let receivedLength = 0;
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) break;
+            
+            chunks.push(value);
+            receivedLength += value.length;
+            
+            // Mostrar progreso en el botón
+            if (total) {
+                const percent = Math.round((receivedLength / total) * 100);
+                downloadBtn.textContent = `${percent}%`;
+            }
+        }
+        
+        // Combinar chunks
+        const blob = new Blob(chunks);
+        
+        // Crear enlace de descarga
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -251,9 +344,21 @@ async function downloadFile(filename, originalName) {
         document.body.removeChild(a);
         
         console.log('✅ Archivo descargado:', originalName);
+        
+        // Restaurar botón
+        downloadBtn.textContent = '⬇️ Descargar';
+        
     } catch (error) {
         console.error('❌ Error al descargar:', error);
-        alert('Error al descargar el archivo');
+        alert('Error al descargar el archivo. Por favor intenta de nuevo.');
+        downloadBtn.textContent = '❌ Error';
+        
+        setTimeout(() => {
+            downloadBtn.textContent = '⬇️ Descargar';
+        }, 2000);
+    } finally {
+        downloadBtn.classList.remove('downloading');
+        downloadBtn.disabled = false;
     }
 }
 
@@ -352,7 +457,6 @@ dropZone.addEventListener('drop', (e) => {
     }
 });
 
-// Prevenir comportamiento por defecto del drag en el documento
 document.addEventListener('dragover', (e) => {
     e.preventDefault();
 });
@@ -366,7 +470,6 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 AutoSync Client iniciado');
     connectWebSocket();
     
-    // Ajustar altura en móviles para compensar la barra de direcciones
     const setVH = () => {
         const vh = window.innerHeight * 0.01;
         document.documentElement.style.setProperty('--vh', `${vh}px`);
@@ -377,5 +480,4 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('orientationchange', setVH);
 });
 
-// Exponer función global para descargas
 window.downloadFile = downloadFile;

@@ -6,8 +6,14 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#128C7E">
+    
+    <!-- PREVENIR CACHÉ -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
     <title>AutoSync - Compartir Archivos</title>
-    <link rel="stylesheet" href="/css/main.css">
+    
     <style>
         /* Altura dinámica para móviles */
         :root {
@@ -30,6 +36,12 @@
             }
         }
     </style>
+    
+    <!-- Cargar CSS con timestamp dinámico -->
+    <script>
+        const cssVersion = Date.now();
+        document.write('<link rel="stylesheet" href="/css/main.css?v=' + cssVersion + '">');
+    </script>
 </head>
 <body>
     <div class="container">
@@ -69,6 +81,12 @@
         </div>
     </div>
 
-    <script src="/js/app.js"></script>
+    <!-- JS con query string de versión para evitar caché -->
+    <script>
+        const jsVersion = Date.now();
+        const script = document.createElement('script');
+        script.src = `/js/app.js?v=${jsVersion}`;
+        document.body.appendChild(script);
+    </script>
 </body>
 </html>

@@ -7,7 +7,6 @@
 #include <set>
 #include <fstream>
 
-// Variable global para limpieza
 std::unique_ptr<FileManager> g_file_manager;
 std::set<crow::websocket::connection*> g_ws_connections;
 std::mutex g_ws_mutex;
@@ -30,7 +29,6 @@ void broadcastToAllClients(const std::string& message) {
 }
 
 std::string getClientIP(const crow::request& req) {
-    // Intentar obtener IP real del cliente
     std::string ip = req.get_header_value("X-Real-IP");
     if (ip.empty()) {
         ip = req.get_header_value("X-Forwarded-For");
@@ -42,17 +40,15 @@ std::string getClientIP(const crow::request& req) {
 }
 
 int main() {
-    // Configurar manejadores de señales
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
     
-    // Inicializar FileManager
     g_file_manager = std::make_unique<FileManager>();
     
     crow::SimpleApp app;
 
     // ============================================
-    // WebSocket para sincronización en tiempo real
+    // WebSocket
     // ============================================
     CROW_ROUTE(app, "/ws")
     .websocket()
@@ -61,7 +57,6 @@ int main() {
         g_ws_connections.insert(&conn);
         std::cout << "🔌 Cliente conectado via WebSocket" << std::endl;
         
-        // Enviar estado inicial
         auto messages = g_file_manager->getAllMessages();
         crow::json::wvalue response;
         response["type"] = "initial_state";
@@ -99,7 +94,6 @@ int main() {
     // API REST
     // ============================================
     
-    // Estado del servidor
     CROW_ROUTE(app, "/api/status")
     ([](){
         crow::json::wvalue status;
@@ -111,7 +105,6 @@ int main() {
         return status;
     });
 
-    // Obtener todos los mensajes
     CROW_ROUTE(app, "/api/messages")
     ([](){
         auto messages = g_file_manager->getAllMessages();
@@ -138,7 +131,6 @@ int main() {
         return response;
     });
 
-    // Enviar mensaje de texto
     CROW_ROUTE(app, "/api/send_text")
     .methods("POST"_method)
     ([](const crow::request& req){
@@ -152,7 +144,6 @@ int main() {
         
         std::string msg_id = g_file_manager->addTextMessage(text, sender_ip);
         
-        // Notificar a todos los clientes via WebSocket
         crow::json::wvalue notification;
         notification["type"] = "new_message";
         notification["message"]["id"] = msg_id;
@@ -169,7 +160,6 @@ int main() {
         return crow::response(response);
     });
 
-    // Subir archivo
     CROW_ROUTE(app, "/api/upload")
     .methods("POST"_method)
     ([](const crow::request& req){
@@ -186,7 +176,6 @@ int main() {
             auto messages = g_file_manager->getAllMessages();
             auto& last_msg = messages.back();
             
-            // Notificar a todos los clientes
             crow::json::wvalue notification;
             notification["type"] = "new_message";
             notification["message"]["id"] = msg_id;
@@ -209,40 +198,55 @@ int main() {
         return crow::response(400, "No file uploaded");
     });
 
-    // Descargar archivo
+    // DESCARGA CON STREAMING
     CROW_ROUTE(app, "/api/download/<string>")
-    ([](const std::string& filename){
+    ([](const crow::request&, crow::response& res, const std::string& filename){
         std::string file_path = g_file_manager->getFilePath(filename);
         
         if (!g_file_manager->fileExists(filename)) {
-            return crow::response(404, "File not found");
+            res.code = 404;
+            res.body = "File not found";
+            res.end();
+            return;
         }
+        
+        struct stat stat_buf;
+        if (stat(file_path.c_str(), &stat_buf) != 0) {
+            res.code = 500;
+            res.body = "Cannot stat file";
+            res.end();
+            return;
+        }
+        
+        size_t file_size = stat_buf.st_size;
         
         std::ifstream file(file_path, std::ios::binary);
         if (!file) {
-            return crow::response(500, "Cannot read file");
+            res.code = 500;
+            res.body = "Cannot open file";
+            res.end();
+            return;
         }
         
-        // Leer archivo en chunks para evitar saturar memoria
-        const size_t chunk_size = 1024 * 1024; // 1 MB chunks
-        std::string content;
-        content.reserve(chunk_size);
-        char buffer[chunk_size];
+        res.set_header("Content-Type", "application/octet-stream");
+        res.set_header("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        res.set_header("Content-Length", std::to_string(file_size));
+        res.set_header("Accept-Ranges", "bytes");
+        res.code = 200;
         
-        while (file.read(buffer, chunk_size) || file.gcount() > 0) {
-            content.append(buffer, file.gcount());
+        const size_t chunk_size = 65536;
+        std::vector<char> buffer(chunk_size);
+        
+        while (file.read(buffer.data(), chunk_size) || file.gcount() > 0) {
+            res.body.append(buffer.data(), file.gcount());
         }
+        
         file.close();
-        
-        auto response = crow::response(content);
-        response.set_header("Content-Type", "application/octet-stream");
-        response.set_header("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-        response.set_header("Content-Length", std::to_string(content.size()));
-        return response;
+        res.end();
     });
 
     // ============================================
-    // Rutas estáticas (HTML, CSS, JS)
+    // Rutas estáticas SIN CACHÉ
     // ============================================
     
     CROW_ROUTE(app, "/")
@@ -251,6 +255,9 @@ int main() {
         if (res) {
             auto response = crow::response(res->content);
             response.set_header("Content-Type", res->mime_type);
+            response.set_header("Cache-Control", "no-cache, no-store, must-revalidate");
+            response.set_header("Pragma", "no-cache");
+            response.set_header("Expires", "0");
             return response;
         }
         return crow::response(404);
@@ -264,7 +271,9 @@ int main() {
         if (res) {
             auto response = crow::response(res->content);
             response.set_header("Content-Type", res->mime_type);
-            response.set_header("Cache-Control", "public, max-age=31536000");
+            response.set_header("Cache-Control", "no-cache, no-store, must-revalidate");
+            response.set_header("Pragma", "no-cache");
+            response.set_header("Expires", "0");
             return response;
         }
         
@@ -277,7 +286,6 @@ int main() {
     
     app.port(8081).multithreaded().run();
     
-    // Limpieza al salir normalmente
     g_file_manager->cleanup();
     
     return 0;
