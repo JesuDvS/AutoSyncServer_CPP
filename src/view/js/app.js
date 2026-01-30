@@ -1,7 +1,7 @@
 // Estado global
 let ws = null;
 let reconnectInterval = null;
-let isMyMessage = false;
+let myIP = null;
 
 // Elementos DOM
 const chatContainer = document.getElementById('chatContainer');
@@ -13,11 +13,30 @@ const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
 const dropZone = document.getElementById('dropZone');
 
+// 🔥 SIMPLIFICADO: Obtener IP del cliente desde su propio request
+async function getMyIP() {
+    try {
+        const response = await fetch('/api/my_ip');
+        if (!response.ok) {
+            console.warn('⚠️ No se pudo obtener IP, usando comparación por timestamp');
+            return null;
+        }
+        const data = await response.json();
+        myIP = data.ip;
+        console.log('📍 Mi IP:', myIP);
+        return myIP;
+    } catch (error) {
+        console.error('❌ Error obteniendo IP:', error);
+        return null;
+    }
+}
+
 // Conectar WebSocket
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     
+    console.log('🔌 Conectando a:', wsUrl);
     ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
@@ -32,16 +51,32 @@ function connectWebSocket() {
     };
     
     ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log('📨 Mensaje recibido:', data);
-        
-        if (data.type === 'initial_state') {
-            chatContainer.innerHTML = '';
-            data.messages.forEach(msg => addMessageToUI(msg, false));
-            scrollToBottom();
-        } else if (data.type === 'new_message') {
-            addMessageToUI(data.message, false);
-            scrollToBottom();
+        try {
+            const data = JSON.parse(event.data);
+            console.log('📨 Mensaje recibido:', data);
+            
+            if (data.type === 'initial_state') {
+                console.log(`📦 Cargando ${data.messages.length} mensajes iniciales`);
+                chatContainer.innerHTML = '';
+                
+                data.messages.forEach((msg, index) => {
+                    console.log(`  ${index + 1}. Mensaje:`, msg);
+                    const isMine = isMyMessage(msg);
+                    addMessageToUI(msg, isMine);
+                });
+                
+                scrollToBottom();
+                console.log('✅ Mensajes cargados');
+                
+            } else if (data.type === 'new_message') {
+                console.log('🆕 Nuevo mensaje:', data.message);
+                const isMine = isMyMessage(data.message);
+                addMessageToUI(data.message, isMine);
+                scrollToBottom();
+            }
+        } catch (error) {
+            console.error('❌ Error procesando mensaje WebSocket:', error);
+            console.error('   Datos recibidos:', event.data);
         }
     };
     
@@ -61,6 +96,21 @@ function connectWebSocket() {
             }, 3000);
         }
     };
+}
+
+// 🔥 FUNCIÓN HELPER: Determinar si un mensaje es mío
+function isMyMessage(message) {
+    if (!myIP || !message.sender_ip) {
+        console.log('⚠️ No hay IP para comparar, asumiendo mensaje externo');
+        return false;
+    }
+    
+    // Comparar IPs (puede venir con puerto como "127.0.0.1:12345")
+    const senderIP = message.sender_ip.split(':')[0];
+    const result = senderIP === myIP || message.sender_ip.includes(myIP);
+    
+    console.log(`🔍 ¿Es mi mensaje? ${result} (sender: ${message.sender_ip}, myIP: ${myIP})`);
+    return result;
 }
 
 // Copiar texto al portapapeles
@@ -112,16 +162,13 @@ async function copyToClipboard(text, buttonElement) {
 
 // Detectar y formatear código
 function formatMessageContent(text) {
-    // Detectar bloques de código (```...```)
     const codeBlockRegex = /```([\s\S]*?)```/g;
     let formatted = escapeHtml(text);
     
-    // Reemplazar bloques de código
     formatted = formatted.replace(codeBlockRegex, (match, code) => {
         return `<pre><code>${code.trim()}</code></pre>`;
     });
     
-    // Detectar código inline (`...`)
     const inlineCodeRegex = /`([^`]+)`/g;
     formatted = formatted.replace(inlineCodeRegex, (match, code) => {
         if (!match.includes('<pre>')) {
@@ -138,7 +185,6 @@ function handleMessageExpansion(contentDiv, text) {
     const lineCount = text.split('\n').length;
     const charCount = text.length;
     
-    // Si el mensaje es largo (más de 10 líneas o 500 caracteres)
     if (lineCount > 10 || charCount > 500) {
         contentDiv.classList.add('collapsed');
         
@@ -156,7 +202,6 @@ function handleMessageExpansion(contentDiv, text) {
                 contentDiv.classList.add('collapsed');
                 expandBtn.textContent = '▼ Ver más';
                 
-                // Scroll al mensaje cuando se colapsa
                 contentDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
         });
@@ -167,89 +212,104 @@ function handleMessageExpansion(contentDiv, text) {
     return null;
 }
 
-// Agregar mensaje al UI
+// 🔥 AGREGAR MENSAJE AL UI (CON DEBUG)
 function addMessageToUI(message, isSent) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
-    
-    const wrapper = document.createElement('div');
-    wrapper.className = 'message-wrapper';
-    
-    const bubble = document.createElement('div');
-    bubble.className = 'message-bubble';
-    
-    if (message.type === 'file') {
-        const fileAttachment = document.createElement('div');
-        fileAttachment.className = 'file-attachment';
-        
-        const fileIcon = getFileIcon(message.content);
-        
-        fileAttachment.innerHTML = `
-            <div class="file-icon">${fileIcon}</div>
-            <div class="file-info">
-                <div class="file-name">${escapeHtml(message.content)}</div>
-                <div class="file-size">${formatFileSize(message.filesize)}</div>
-            </div>
-            <button class="download-btn" onclick="downloadFile('${message.filename}', '${escapeHtml(message.content)}')">
-                ⬇️ Descargar
-            </button>
-        `;
-        
-        bubble.appendChild(fileAttachment);
-    } else {
-        // Mensaje de texto con formato
-        const content = document.createElement('div');
-        content.className = 'message-content';
-        content.innerHTML = formatMessageContent(message.content);
-        
-        bubble.appendChild(content);
-        
-        // Botón de expansión si es necesario
-        const expandBtn = handleMessageExpansion(content, message.content);
-        if (expandBtn) {
-            bubble.appendChild(expandBtn);
-        }
-        
-        // Botón de copiar
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'copy-btn';
-        copyBtn.innerHTML = '📋';
-        copyBtn.title = 'Copiar mensaje';
-        copyBtn.setAttribute('aria-label', 'Copiar mensaje al portapapeles');
-        
-        copyBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            copyToClipboard(message.content, copyBtn);
+    try {
+        console.log(`🎨 Renderizando mensaje:`, {
+            id: message.id,
+            type: message.type,
+            isSent,
+            sender: message.sender_ip,
+            content: message.content?.substring(0, 50) + '...'
         });
         
-        wrapper.appendChild(copyBtn);
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+        messageDiv.setAttribute('data-message-id', message.id);
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'message-wrapper';
+        
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        
+        if (message.type === 'file') {
+            const fileAttachment = document.createElement('div');
+            fileAttachment.className = 'file-attachment';
+            
+            const fileIcon = getFileIcon(message.content);
+            
+            fileAttachment.innerHTML = `
+                <div class="file-icon">${fileIcon}</div>
+                <div class="file-info">
+                    <div class="file-name">${escapeHtml(message.content)}</div>
+                    <div class="file-size">${formatFileSize(message.filesize)}</div>
+                </div>
+                <button class="download-btn" onclick="downloadFile('${message.filename}', '${escapeHtml(message.content)}')">
+                    ⬇️ Descargar
+                </button>
+            `;
+            
+            bubble.appendChild(fileAttachment);
+        } else {
+            const content = document.createElement('div');
+            content.className = 'message-content';
+            content.innerHTML = formatMessageContent(message.content);
+            
+            bubble.appendChild(content);
+            
+            const expandBtn = handleMessageExpansion(content, message.content);
+            if (expandBtn) {
+                bubble.appendChild(expandBtn);
+            }
+            
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-btn';
+            copyBtn.innerHTML = '📋';
+            copyBtn.title = 'Copiar mensaje';
+            copyBtn.setAttribute('aria-label', 'Copiar mensaje al portapapeles');
+            
+            copyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                copyToClipboard(message.content, copyBtn);
+            });
+            
+            wrapper.appendChild(copyBtn);
+        }
+        
+        const meta = document.createElement('div');
+        meta.className = 'message-meta';
+        
+        const sender = document.createElement('span');
+        sender.className = 'message-sender';
+        sender.textContent = isSent ? 'Tú' : (message.sender_ip ? message.sender_ip.split(':')[0] : 'Desconocido');
+        
+        const time = document.createElement('span');
+        time.className = 'message-time';
+        time.textContent = formatTime(message.timestamp);
+        
+        meta.appendChild(sender);
+        meta.appendChild(time);
+        bubble.appendChild(meta);
+        
+        wrapper.appendChild(bubble);
+        messageDiv.appendChild(wrapper);
+        chatContainer.appendChild(messageDiv);
+        
+        console.log('✅ Mensaje renderizado en DOM:', message.id);
+        
+    } catch (error) {
+        console.error('❌ Error renderizando mensaje:', error);
+        console.error('   Mensaje que causó el error:', message);
     }
-    
-    // Metadatos
-    const meta = document.createElement('div');
-    meta.className = 'message-meta';
-    
-    const sender = document.createElement('span');
-    sender.className = 'message-sender';
-    sender.textContent = isSent ? 'Tú' : message.sender_ip.split(':')[0];
-    
-    const time = document.createElement('span');
-    time.className = 'message-time';
-    time.textContent = formatTime(message.timestamp);
-    
-    meta.appendChild(sender);
-    meta.appendChild(time);
-    bubble.appendChild(meta);
-    
-    wrapper.appendChild(bubble);
-    messageDiv.appendChild(wrapper);
-    chatContainer.appendChild(messageDiv);
 }
 
 // Enviar mensaje de texto
 async function sendTextMessage() {
     const text = messageInput.value.trim();
     if (!text) return;
+    
+    console.log('📤 Enviando mensaje:', text.substring(0, 50) + '...');
     
     try {
         const response = await fetch('/api/send_text', {
@@ -258,20 +318,28 @@ async function sendTextMessage() {
             body: JSON.stringify({ text })
         });
         
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         if (data.success) {
             messageInput.value = '';
             console.log('✅ Mensaje enviado:', data.message_id);
+        } else {
+            console.error('❌ El servidor rechazó el mensaje:', data);
         }
     } catch (error) {
         console.error('❌ Error al enviar mensaje:', error);
-        alert('Error al enviar el mensaje');
+        alert('Error al enviar el mensaje: ' + error.message);
     }
 }
 
 // Subir archivos
 async function uploadFiles(files) {
     for (const file of files) {
+        console.log('📤 Subiendo archivo:', file.name);
+        
         const formData = new FormData();
         formData.append('file', file);
         
@@ -281,20 +349,23 @@ async function uploadFiles(files) {
                 body: formData
             });
             
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const data = await response.json();
             if (data.success) {
                 console.log('✅ Archivo subido:', data.filename);
             }
         } catch (error) {
             console.error('❌ Error al subir archivo:', error);
-            alert(`Error al subir ${file.name}`);
+            alert(`Error al subir ${file.name}: ${error.message}`);
         }
     }
 }
 
 // Descargar archivo con PROGRESO
 async function downloadFile(filename, originalName) {
-    // Obtener el botón de descarga
     const downloadBtn = event.target;
     downloadBtn.classList.add('downloading');
     downloadBtn.disabled = true;
@@ -306,11 +377,9 @@ async function downloadFile(filename, originalName) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        // Obtener el tamaño total
         const contentLength = response.headers.get('Content-Length');
         const total = parseInt(contentLength, 10);
         
-        // Leer el stream
         const reader = response.body.getReader();
         const chunks = [];
         let receivedLength = 0;
@@ -323,17 +392,14 @@ async function downloadFile(filename, originalName) {
             chunks.push(value);
             receivedLength += value.length;
             
-            // Mostrar progreso en el botón
             if (total) {
                 const percent = Math.round((receivedLength / total) * 100);
                 downloadBtn.textContent = `${percent}%`;
             }
         }
         
-        // Combinar chunks
         const blob = new Blob(chunks);
         
-        // Crear enlace de descarga
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -345,7 +411,6 @@ async function downloadFile(filename, originalName) {
         
         console.log('✅ Archivo descargado:', originalName);
         
-        // Restaurar botón
         downloadBtn.textContent = '⬇️ Descargar';
         
     } catch (error) {
@@ -364,17 +429,28 @@ async function downloadFile(filename, originalName) {
 
 // Utilidades
 function formatTime(timestamp) {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    try {
+        const date = new Date(timestamp);
+        if (isNaN(date.getTime())) {
+            return timestamp; // Si no es una fecha válida, devolver como texto
+        }
+        return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+        console.error('Error formateando tiempo:', error);
+        return timestamp;
+    }
 }
 
 function formatFileSize(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 function getFileIcon(filename) {
+    if (!filename) return '📎';
+    
     const ext = filename.split('.').pop().toLowerCase();
     
     const icons = {
@@ -390,6 +466,7 @@ function getFileIcon(filename) {
 }
 
 function escapeHtml(text) {
+    if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
@@ -465,11 +542,26 @@ document.addEventListener('drop', (e) => {
     e.preventDefault();
 });
 
-// Inicializar
-document.addEventListener('DOMContentLoaded', () => {
+// 🔥 INICIALIZACIÓN CON DEBUG COMPLETO
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('='.repeat(50));
     console.log('🚀 AutoSync Client iniciado');
+    console.log('='.repeat(50));
+    
+    // Verificar elementos DOM
+    console.log('✓ chatContainer:', chatContainer ? 'OK' : '❌ NO ENCONTRADO');
+    console.log('✓ messageInput:', messageInput ? 'OK' : '❌ NO ENCONTRADO');
+    console.log('✓ sendBtn:', sendBtn ? 'OK' : '❌ NO ENCONTRADO');
+    
+    // Obtener IP
+    console.log('📍 Obteniendo mi IP...');
+    await getMyIP();
+    
+    // Conectar WebSocket
+    console.log('🔌 Conectando WebSocket...');
     connectWebSocket();
     
+    // Configurar viewport height
     const setVH = () => {
         const vh = window.innerHeight * 0.01;
         document.documentElement.style.setProperty('--vh', `${vh}px`);
@@ -478,6 +570,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setVH();
     window.addEventListener('resize', setVH);
     window.addEventListener('orientationchange', setVH);
+    
+    console.log('='.repeat(50));
+    console.log('✅ Inicialización completa');
+    console.log('='.repeat(50));
 });
 
+// Exportar función global para descargas
 window.downloadFile = downloadFile;

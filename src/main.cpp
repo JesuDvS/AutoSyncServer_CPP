@@ -94,6 +94,14 @@ int main() {
     // API REST
     // ============================================
     
+    // 🔥 NUEVO: Endpoint para obtener IP del cliente
+    CROW_ROUTE(app, "/api/my_ip")
+    ([](const crow::request& req){
+        crow::json::wvalue response;
+        response["ip"] = getClientIP(req);
+        return response;
+    });
+    
     CROW_ROUTE(app, "/api/status")
     ([](){
         crow::json::wvalue status;
