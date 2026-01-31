@@ -21,6 +21,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${GENERATED_DIR})
 
 find_package(Threads REQUIRED)
+find_package(CURL REQUIRED)
+
 
 # ===== BUSCAR RECURSOS =====
 message(STATUS "=== Buscando recursos en: ${CMAKE_CURRENT_SOURCE_DIR}/src/view ===")
@@ -93,7 +95,9 @@ target_include_directories(${EXECUTABLE_NAME} PRIVATE
 # ===== LINKER =====
 target_link_libraries(${EXECUTABLE_NAME} PRIVATE
     Threads::Threads
+    CURL::libcurl
 )
+
 
 # 🔥 FIX CRÍTICO PARA std::experimental::filesystem 🔥
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")

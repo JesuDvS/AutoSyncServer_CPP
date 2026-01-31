@@ -715,3 +715,28 @@ body {
         font-size: 12px;
     }
 }
+
+/* Fix para móviles Android */
+html {
+    height: -webkit-fill-available;
+}
+
+body {
+    min-height: -webkit-fill-available;
+}
+
+@media (max-width: 767px) {
+    .container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 100vh;
+        height: -webkit-fill-available;
+    }
+    
+    .input-area {
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+    }
+}

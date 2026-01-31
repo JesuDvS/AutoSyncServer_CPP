@@ -6,6 +6,9 @@
 #include <memory>
 #include <set>
 #include <fstream>
+#include <curl/curl.h>
+#include <thread>
+#include <chrono>
 
 std::unique_ptr<FileManager> g_file_manager;
 std::set<crow::websocket::connection*> g_ws_connections;
@@ -37,6 +40,38 @@ std::string getClientIP(const crow::request& req) {
         ip = req.remote_ip_address;
     }
     return ip;
+}
+
+// Función para obtener la IP del servidor llamándose a sí mismo
+std::string getServerIP() {
+    try {
+        // Hacer una petición HTTP al propio servidor
+        CURL* curl = curl_easy_init();
+        if (!curl) return "localhost";
+        
+        std::string response;
+        curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8081/api/my_ip");
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, 
+            +[](char* ptr, size_t size, size_t nmemb, std::string* data) {
+                data->append(ptr, size * nmemb);
+                return size * nmemb;
+            });
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 2L);
+        
+        CURLcode res = curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+        
+        if (res == CURLE_OK) {
+            auto json = crow::json::load(response);
+            if (json && json.has("ip")) {
+                return json["ip"].s();
+            }
+        }
+    } catch (...) {
+        return "localhost";
+    }
+    return "localhost";
 }
 
 int main() {
@@ -318,14 +353,37 @@ int main() {
         
         return crow::response(404, "Resource not found: " + resource_path);
     });
-
+    // ============================================
     std::cout << "🚀 AutoSync Server iniciando en puerto 8081..." << std::endl;
     std::cout << "📂 Directorio temporal: " << g_file_manager->getTempDir() << std::endl;
     std::cout << "⚠️  ADVERTENCIA: Todos los archivos se eliminarán al cerrar el servidor" << std::endl;
-    
-    app.port(8081).multithreaded().run();
-    
+    std::cout << "\n🌐 Accede desde tu navegador:" << std::endl;
+    std::cout << "   \033]8;;http://localhost:8081\033\\"
+            << "http://localhost:8081"
+            << "\033]8;;\033\\" << std::endl;
+
+    // Iniciar servidor en un thread separado para poder hacer la petición
+    std::thread server_thread([&app]() {
+        app.port(8081).multithreaded().run();
+    });
+
+    // Esperar un momento a que el servidor inicie
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    // Obtener IP llamándose a sí mismo
+    std::string server_ip = getServerIP();
+    if (server_ip != "localhost" && server_ip != "127.0.0.1") {
+        std::cout << "   \033]8;;http://" << server_ip << ":8081\033\\"
+                << "http://" << server_ip << ":8081"
+                << "\033]8;;\033\\" << " (red local)" << std::endl;
+    }
+
+    std::cout << std::endl;
+
+    server_thread.join();
+
+    // Limpiar archivos temporales al finalizar
     g_file_manager->cleanup();
-    
+
     return 0;
 }
