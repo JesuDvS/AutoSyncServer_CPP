@@ -367,8 +367,45 @@ int main() {
         app.port(8081).multithreaded().run();
     });
 
-    // Esperar un momento a que el servidor inicie
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    // ✅ ESPERAR A QUE EL SERVIDOR ESTÉ REALMENTE LISTO
+    std::cout << "⏳ Esperando a que el servidor inicie..." << std::endl;
+    
+    bool server_ready = false;
+    int max_attempts = 20; // 10 segundos máximo (20 * 500ms)
+    
+    for (int attempt = 0; attempt < max_attempts && !server_ready; attempt++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        
+        try {
+            CURL* curl = curl_easy_init();
+            if (curl) {
+                std::string response;
+                curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:8081/api/status");
+                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, 
+                    +[](char* ptr, size_t size, size_t nmemb, std::string* data) {
+                        data->append(ptr, size * nmemb);
+                        return size * nmemb;
+                    });
+                curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+                curl_easy_setopt(curl, CURLOPT_TIMEOUT, 1L);
+                curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 1L);
+                
+                CURLcode res = curl_easy_perform(curl);
+                curl_easy_cleanup(curl);
+                
+                if (res == CURLE_OK) {
+                    server_ready = true;
+                    std::cout << "✅ Servidor listo (intento " << (attempt + 1) << ")" << std::endl;
+                }
+            }
+        } catch (...) {
+            // Ignorar errores y seguir intentando
+        }
+    }
+    
+    if (!server_ready) {
+        std::cout << "⚠️  El servidor tardó en iniciar, continuando de todos modos..." << std::endl;
+    }
 
     // Obtener IP llamándose a sí mismo
     std::string server_ip = getServerIP();
