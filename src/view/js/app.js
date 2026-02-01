@@ -49,7 +49,7 @@ function connectWebSocket() {
     ws.onopen = () => {
         console.log('✅ WebSocket conectado');
         statusDot.classList.remove('disconnected');
-        statusText.textContent = 'Conectado: ' + (myIP || 'IP desconocida');
+        statusText.textContent = 'Conectado desde ' + (myIP || 'IP desconocida');
         
         if (reconnectInterval) {
             clearInterval(reconnectInterval);
